@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImageDrop | Share Images Instantly</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { font-family: 'Inter', sans-serif; background-color: #09090b; color: #fafafa; overflow-x: hidden; margin: 0; min-height: 100vh; }
+.card-theme { background-color: #09090b; border: 1px solid #27272a; }
+.upload-pulse { animation: pulseBorder 2s infinite; }
+@keyframes pulseBorder { 0% { border-color: #27272a; } 50% { border-color: #71717a; background-color: #18181b; } 100% { border-color: #27272a; } }
+.toast-anim { animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes slideUpFade { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.fade-in { animation: fadeIn 0.3s ease-in-out forwards; }
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #09090b; }
+::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+</style>
+</head>
+<body class="flex flex-col items-center justify-center antialiased selection:bg-zinc-100 selection:text-zinc-900">
+
+<div id="toast" class="fixed bottom-6 right-6 bg-zinc-950 text-zinc-50 px-6 py-4 rounded-md shadow-lg hidden items-center gap-3 font-medium z-50 border border-zinc-800">
+    <i class="fa-solid fa-check text-zinc-100"></i>
+    <span id="toast-msg" class="text-sm">Action successful!</span>
+</div>
+
+<div id="main-container" class="w-full max-w-2xl p-4 md:p-6 w-full fade-in">
+    
+    <div id="upload-view" class="card-theme rounded-xl p-8 md:p-10 shadow-sm text-center w-full relative overflow-hidden hidden">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold mb-2 tracking-tight flex items-center justify-center gap-3 text-zinc-50">
+                <i class="fa-solid fa-layer-group text-zinc-100"></i> ImageDrop
+            </h1>
+            <p class="text-zinc-400 text-sm">Serverless, instant image sharing. Upload, copy the link, and share anywhere.</p>
+        </div>
+
+        <div class="mb-6 flex items-center justify-center gap-3">
+            <label for="format-select" class="text-sm font-medium text-zinc-400">Image Format:</label>
+            <div class="relative">
+                <select id="format-select" class="appearance-none bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm rounded-md px-3 py-1.5 pr-8 focus:outline-none focus:ring-1 focus:ring-zinc-400 transition-colors cursor-pointer">
+                    <option value="image/png">PNG (.png)</option>
+                    <option value="image/jpeg">JPEG (.jpg)</option>
+                    <option value="image/webp">WEBP (.webp)</option>
+                </select>
+                <i class="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 text-[10px] pointer-events-none"></i>
+            </div>
+        </div>
+        
+        <label id="drop-zone" class="block border-2 border-dashed border-zinc-800 rounded-xl p-12 transition-all duration-200 cursor-pointer hover:border-zinc-400 hover:bg-zinc-900/50 relative group">
+            <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/png, image/jpeg, image/webp, image/gif">
+            <div class="flex flex-col items-center justify-center transform group-hover:scale-[1.02] transition-transform duration-200">
+                <div class="w-16 h-16 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-4 shadow-sm group-hover:border-zinc-600 transition-colors">
+                    <i class="fa-solid fa-cloud-arrow-up text-2xl text-zinc-100"></i>
+                </div>
+                <h3 class="text-lg font-semibold mb-1 text-zinc-100">Click or drag image to upload</h3>
+                <p class="text-zinc-500 text-sm font-medium">Converts to your selected format</p>
+            </div>
+        </label>
+    </div>
+
+    <div id="loading-view" class="card-theme rounded-xl p-16 shadow-sm text-center w-full hidden flex-col items-center justify-center">
+        <div class="relative w-16 h-16 mb-6">
+            <div class="absolute inset-0 border-4 border-zinc-800 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-zinc-100 rounded-full border-t-transparent animate-spin"></div>
+        </div>
+        <h2 class="text-xl font-semibold text-zinc-50 mb-2">Processing Image</h2>
+        <p class="text-zinc-400 text-sm">Optimizing and generating your secure link...</p>
+    </div>
+
+    <div id="result-view" class="card-theme rounded-xl p-8 shadow-sm w-full hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+            <div>
+                <h2 class="text-xl font-semibold text-zinc-50 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-sparkles text-zinc-100 text-sm"></i> Ready to Share
+                </h2>
+                <p class="text-zinc-400 text-sm">Your image is encoded directly into this link.</p>
+            </div>
+            <button id="btn-new" class="w-full sm:w-auto bg-transparent border border-zinc-800 text-zinc-50 hover:bg-zinc-800 h-9 px-4 rounded-md text-sm font-medium transition-colors flex items-center justify-center">
+                <i class="fa-solid fa-rotate-left mr-2 text-xs"></i> Upload Another
+            </button>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row items-center gap-3 mb-8">
+            <input type="text" id="share-url" readonly class="flex h-10 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 transition-all font-mono" value="">
+            <button id="btn-copy" class="w-full sm:w-auto bg-zinc-50 text-zinc-900 hover:bg-zinc-200 h-10 px-6 rounded-md text-sm font-semibold transition-colors flex items-center justify-center whitespace-nowrap shadow-sm">
+                <i class="fa-solid fa-link mr-2"></i> Copy Link
+            </button>
+        </div>
+        
+        <div class="w-full rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center relative p-2">
+            <img id="preview-img" src="" class="max-w-full max-h-[350px] object-contain rounded-md">
+        </div>
+    </div>
+</div>
+
+<script>
+const els = {
+    uploadView: document.getElementById('upload-view'),
+    loadingView: document.getElementById('loading-view'),
+    resultView: document.getElementById('result-view'),
+    mainContainer: document.getElementById('main-container'),
+    fileInput: document.getElementById('file-input'),
+    dropZone: document.getElementById('drop-zone'),
+    shareUrl: document.getElementById('share-url'),
+    previewImg: document.getElementById('preview-img'),
+    btnCopy: document.getElementById('btn-copy'),
+    btnNew: document.getElementById('btn-new'),
+    formatSelect: document.getElementById('format-select'),
+    toast: document.getElementById('toast'),
+    toastMsg: document.getElementById('toast-msg')
+};
+
+function showToast(message) {
+    els.toastMsg.textContent = message;
+    els.toast.classList.remove('hidden');
+    els.toast.classList.add('flex', 'toast-anim');
+    setTimeout(() => {
+        els.toast.classList.remove('toast-anim');
+        els.toast.style.animation = 'slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) reverse forwards';
+        setTimeout(() => {
+            els.toast.classList.add('hidden');
+            els.toast.classList.remove('flex');
+            els.toast.style.animation = '';
+        }, 400);
+    }, 3000);
+}
+
+function copyToClipboard(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        document.execCommand('copy');
+        showToast('Link copied to clipboard');
+    } catch (err) {
+        showToast('Failed to copy link');
+    }
+    document.body.removeChild(textarea);
+}
+
+function switchView(viewName) {
+    els.uploadView.classList.add('hidden');
+    els.loadingView.classList.add('hidden');
+    els.resultView.classList.add('hidden');
+    els.mainContainer.classList.add('hidden');
+
+    els.mainContainer.classList.remove('hidden');
+    if (viewName === 'upload') els.uploadView.classList.remove('hidden');
+    if (viewName === 'loading') els.loadingView.classList.remove('hidden', 'flex');
+    if (viewName === 'result') els.resultView.classList.remove('hidden');
+}
+
+function compressAndEncodeImage(file) {
+    switchView('loading');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxDimension = 1600;
+
+            if (width > height && width > maxDimension) {
+                height = Math.round(height * (maxDimension / width));
+                width = maxDimension;
+            } else if (height > maxDimension) {
+                width = Math.round(width * (maxDimension / height));
+                height = maxDimension;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            const format = els.formatSelect.value;
+            
+            // Fill with white for JPEG to prevent transparent areas turning black
+            if (format === 'image/jpeg') {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, width, height);
+            }
+            
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Apply selected format and quality
+            const quality = format === 'image/png' ? undefined : 0.85;
+            const base64Url = canvas.toDataURL(format, quality);
+            
+            els.previewImg.src = base64Url;
+            
+            const baseUrl = window.location.href.split('#')[0];
+            const finalUrl = baseUrl + '#' + base64Url;
+            
+            els.shareUrl.value = finalUrl;
+            els.fileInput.value = '';
+            
+            switchView('result');
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    els.dropZone.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    els.dropZone.addEventListener(eventName, () => {
+        els.dropZone.classList.add('upload-pulse', 'bg-zinc-900/30');
+    }, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    els.dropZone.addEventListener(eventName, () => {
+        els.dropZone.classList.remove('upload-pulse', 'bg-zinc-900/30');
+    }, false);
+});
+
+els.dropZone.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files.length && files[0].type.startsWith('image/')) {
+        compressAndEncodeImage(files[0]);
+    } else {
+        showToast('Please upload a valid image file.');
+    }
+}, false);
+
+els.fileInput.addEventListener('change', function() {
+    if (this.files.length && this.files[0].type.startsWith('image/')) {
+        compressAndEncodeImage(this.files[0]);
+    }
+});
+
+els.btnCopy.addEventListener('click', () => copyToClipboard(els.shareUrl.value));
+
+els.btnNew.addEventListener('click', () => {
+    els.previewImg.src = '';
+    els.shareUrl.value = '';
+    window.history.pushState("", document.title, window.location.pathname + window.location.search);
+    switchView('upload');
+});
+
+function checkRoute() {
+    const hash = window.location.hash;
+    if (hash && hash.startsWith('#data:image')) {
+        document.documentElement.innerHTML = `
+            <head>
+                <meta name="viewport" content="width=device-width, minimum-scale=0.1">
+                <title>Image</title>
+                <style>
+                    body { margin: 0; background: #0e0e0e; height: 100vh; display: flex; align-items: center; justify-content: center; }
+                    img { max-width: 100%; max-height: 100%; display: block; object-fit: contain; }
+                </style>
+            </head>
+            <body>
+                <img src="${hash.substring(1)}">
+            </body>
+        `;
+    } else {
+        switchView('upload');
+        document.title = "ImageDrop | Share Images Instantly";
+    }
+}
+
+window.addEventListener('hashchange', checkRoute);
+checkRoute();
+
+</script>
+</body>
+</html>
